@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MindCheckers | Strategy Thinking Trainer</title>
+    <meta
+      name="description"
+      content="A calm Duolingo-style checkers trainer for strategic thinking, local AI games, post-game coaching, and progress tracking."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="MindCheckers header">
+        <a class="brand" href="#" aria-label="MindCheckers home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>
+            <strong>MindCheckers</strong>
+            <small>Strategy trainer</small>
+          </span>
+        </a>
+
+        <div class="topbar-stats" aria-label="Player progress summary">
+          <div>
+            <span id="streakValue">0</span>
+            <small>day streak</small>
+          </div>
+          <div>
+            <span id="levelValue">1</span>
+            <small>strategy level</small>
+          </div>
+        </div>
+
+        <button class="ghost-button" id="upgradeButton" type="button">Upgrade</button>
+      </header>
+
+      <main class="workspace">
+        <section class="intro-band" aria-labelledby="heroTitle">
+          <div>
+            <p class="eyebrow">AI-powered board training</p>
+            <h1 id="heroTitle">Train strategic thinking through short checkers games.</h1>
+            <p>
+              Play a fast 8x8 match, get a calm coach review, and build visible
+              progress in tactics, foresight, and endgame discipline.
+            </p>
+          </div>
+          <div class="mission-strip" aria-label="Daily mission">
+            <span>Today's mission</span>
+            <strong id="missionText">Win material before move 12</strong>
+            <div class="mission-meter" aria-label="Mission progress">
+              <i id="missionBar"></i>
+            </div>
+            <small id="missionProgress">0 / 1 completed</small>
+          </div>
+        </section>
+
+        <section class="product-grid" aria-label="MindCheckers game workspace">
+          <aside class="side-panel coach-live" aria-labelledby="trainingTitle">
+            <div class="panel-heading">
+              <p class="eyebrow">Training mode</p>
+              <h2 id="trainingTitle">Calm focus</h2>
+            </div>
+
+            <div class="segmented-control" aria-label="AI difficulty">
+              <button class="segment active" data-difficulty="gentle" type="button">Gentle</button>
+              <button class="segment" data-difficulty="focused" type="button">Focused</button>
+              <button class="segment" data-difficulty="sharp" type="button">Sharp</button>
+            </div>
+
+            <div class="metric-list">
+              <div class="metric-row">
+                <span>Material</span>
+                <strong id="materialScore">0</strong>
+              </div>
+              <div class="metric-row">
+                <span>Tempo</span>
+                <strong id="tempoScore">0</strong>
+              </div>
+              <div class="metric-row">
+                <span>Captures</span>
+                <strong id="captureScore">0</strong>
+              </div>
+            </div>
+
+            <div class="tip-box" id="liveTip">
+              Select one of your green pieces. Legal moves will glow.
+            </div>
+
+            <div class="mini-actions" aria-label="Mission actions">
+              <button class="secondary-button" id="claimMissionButton" type="button">Claim mission</button>
+              <button class="secondary-button" id="nextMissionButton" type="button">New mission</button>
+            </div>
+          </aside>
+
+          <section class="board-zone" aria-labelledby="gameTitle">
+            <div class="game-header">
+              <div>
+                <p class="eyebrow">Training game</p>
+                <h2 id="gameTitle">You vs Local AI</h2>
+              </div>
+              <div class="status-pill" id="turnStatus">Your move</div>
+            </div>
+
+            <div class="board-wrap">
+              <div class="board" id="board" aria-label="8 by 8 checkers board"></div>
+            </div>
+
+            <div class="game-actions" aria-label="Game controls">
+              <button class="primary-button" id="newGameButton" type="button">New game</button>
+              <button class="secondary-button" id="hintButton" type="button">Show hint</button>
+              <button class="secondary-button" id="reviewButton" type="button">End & review</button>
+            </div>
+          </section>
+
+          <aside class="side-panel review-panel" aria-labelledby="coachTitle">
+            <div class="panel-heading">
+              <p class="eyebrow">AI Coach</p>
+              <h2 id="coachTitle">Live review</h2>
+            </div>
+
+            <div class="review-stack" id="reviewStack"></div>
+
+            <div class="progress-block" aria-label="Skill progress">
+              <div class="progress-title">
+                <span>Skill map</span>
+                <strong id="xpValue">0 XP</strong>
+              </div>
+              <div class="level-card" aria-label="Level progression">
+                <div>
+                  <span id="levelTitle">Pattern Scout</span>
+                  <strong id="nextLevelLabel">40 XP to next level</strong>
+                </div>
+                <div class="level-meter"><i id="levelBar"></i></div>
+                <small id="unlockLabel">Next unlock: Focus League</small>
+              </div>
+              <div class="skill-row">
+                <span>Tactics</span>
+                <div class="bar"><i id="tacticsBar"></i></div>
+              </div>
+              <div class="skill-row">
+                <span>Foresight</span>
+                <div class="bar"><i id="foresightBar"></i></div>
+              </div>
+              <div class="skill-row">
+                <span>Endgame</span>
+                <div class="bar"><i id="endgameBar"></i></div>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="lower-grid" aria-label="Progress and competition">
+          <div class="wide-panel">
+            <div class="panel-heading inline-heading">
+              <div>
+                <p class="eyebrow">Post-game learning loop</p>
+                <h2>Coach summary</h2>
+              </div>
+              <span id="gameCountLabel">0 games analyzed</span>
+            </div>
+            <div class="insight-grid" id="insightGrid"></div>
+          </div>
+
+          <div class="side-panel leaderboard-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">League preview</p>
+              <h2>Focus League</h2>
+            </div>
+            <ol class="leaderboard" id="leaderboard"></ol>
+            <div class="mini-actions">
+              <button class="primary-button" id="leagueButton" type="button">Join league</button>
+              <button class="secondary-button" id="levelDrillButton" type="button">Level drill</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="proModal" aria-hidden="true">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="proTitle">
+        <button class="modal-close" id="closeProModal" type="button" aria-label="Close Pro preview">Close</button>
+        <p class="eyebrow">Pro preview</p>
+        <h2 id="proTitle">Turn every game into a training plan.</h2>
+        <div class="pro-grid">
+          <div>
+            <strong>Deep coach review</strong>
+            <p>Missed captures, exposed pieces, and next-drill recommendations after every game.</p>
+          </div>
+          <div>
+            <strong>Unlimited level drills</strong>
+            <p>Practice focused scenarios based on your current strategy level.</p>
+          </div>
+          <div>
+            <strong>Seasonal leagues</strong>
+            <p>Compete on XP, consistency, and strategic improvement instead of raw wins only.</p>
+          </div>
+        </div>
+        <button class="primary-button" id="activateProButton" type="button">Activate demo Pro</button>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
