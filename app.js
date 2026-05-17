@@ -20,6 +20,12 @@ const foresightBarEl = document.querySelector("#foresightBar");
 const endgameBarEl = document.querySelector("#endgameBar");
 const gameCountLabelEl = document.querySelector("#gameCountLabel");
 const toastEl = document.querySelector("#toast");
+const reviewSpotlightEl = document.querySelector("#reviewSpotlight");
+const moveHistoryListEl = document.querySelector("#moveHistoryList");
+const moveCountLabelEl = document.querySelector("#moveCountLabel");
+const trainingPathEl = document.querySelector("#trainingPath");
+const copySummaryButton = document.querySelector("#copySummaryButton");
+const summaryOutputEl = document.querySelector("#summaryOutput");
 const missionTextEl = document.querySelector("#missionText");
 const missionBarEl = document.querySelector("#missionBar");
 const missionProgressEl = document.querySelector("#missionProgress");
@@ -35,6 +41,9 @@ const upgradeButton = document.querySelector("#upgradeButton");
 const proModal = document.querySelector("#proModal");
 const closeProModalButton = document.querySelector("#closeProModal");
 const activateProButton = document.querySelector("#activateProButton");
+const onboardingModal = document.querySelector("#onboardingModal");
+const startDemoButton = document.querySelector("#startDemoButton");
+const skipOnboardingButton = document.querySelector("#skipOnboardingButton");
 
 let board = createInitialBoard();
 let selected = null;
@@ -102,8 +111,18 @@ claimMissionButton.addEventListener("click", claimMissionReward);
 nextMissionButton.addEventListener("click", rotateMission);
 leagueButton.addEventListener("click", joinLeague);
 levelDrillButton.addEventListener("click", startLevelDrill);
+copySummaryButton.addEventListener("click", copyDemoSummary);
+startDemoButton.addEventListener("click", () => {
+  closeOnboardingModal();
+  startNewGame();
+  showHint();
+});
+skipOnboardingButton.addEventListener("click", closeOnboardingModal);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeProModal();
+  if (event.key === "Escape") {
+    closeProModal();
+    closeOnboardingModal(false);
+  }
 });
 
 document.querySelectorAll("[data-difficulty]").forEach((button) => {
@@ -113,6 +132,7 @@ document.querySelectorAll("[data-difficulty]").forEach((button) => {
 });
 
 render();
+if (!progress.onboardingSeen) openOnboardingModal();
 
 function createInitialBoard() {
   const nextBoard = Array.from({ length: BOARD_SIZE }, () =>
@@ -149,10 +169,13 @@ function render() {
   renderBoard();
   renderStatus();
   renderMetrics();
+  renderMoveHistory();
+  renderReviewSpotlight();
   renderReview();
   renderProgress();
   renderMission();
   renderInsights();
+  renderTrainingPath();
   renderLeaderboard();
   renderProductState();
 }
@@ -245,6 +268,39 @@ function renderReview() {
     .join("");
 }
 
+function renderReviewSpotlight() {
+  const score = calculateStrategyScore();
+  const level = getLevelInfo(progress.xp);
+  const captures = coachEvents.filter((event) => event.player === HUMAN && event.capture).length;
+  const exposures = coachEvents.filter((event) => event.player === HUMAN && event.exposed).length;
+  const message =
+    gameState === "ended"
+      ? `${captures} captures, ${exposures} exposed moves, Lv. ${level.number} ${level.current.title}.`
+      : "Your review will summarize tactics, safety, level progress, and the next drill.";
+
+  reviewSpotlightEl.innerHTML = `
+    <div class="score-ring" style="--score-angle: ${score * 3.6}deg">${score}</div>
+    <div>
+      <strong>${gameState === "ended" ? "Review snapshot" : "Coach is watching"}</strong>
+      <span>${message}</span>
+    </div>
+  `;
+}
+
+function renderMoveHistory() {
+  moveCountLabelEl.textContent = `${moveLog.length} move${moveLog.length === 1 ? "" : "s"}`;
+
+  if (!moveLog.length) {
+    moveHistoryListEl.innerHTML = "<li>No moves yet</li>";
+    return;
+  }
+
+  moveHistoryListEl.innerHTML = moveLog
+    .slice(-8)
+    .map((move, index) => `<li>${moveLog.length - Math.min(moveLog.length, 8) + index + 1}. ${move}</li>`)
+    .join("");
+}
+
 function renderProgress() {
   const level = getLevelInfo(progress.xp);
   streakValueEl.textContent = String(progress.streak);
@@ -290,6 +346,28 @@ function renderInsights() {
         </article>
       `,
     )
+    .join("");
+}
+
+function renderTrainingPath() {
+  const level = getLevelInfo(progress.xp);
+  const startIndex = clamp(level.number - 1, 0, Math.max(0, LEVELS.length - 3));
+  const visibleLevels = LEVELS.slice(startIndex, startIndex + 3);
+
+  trainingPathEl.innerHTML = visibleLevels
+    .map((item, index) => {
+      const absoluteIndex = startIndex + index;
+      const isActive = absoluteIndex === level.number - 1;
+      const isLocked = progress.xp < item.xp;
+      const state = isActive ? "Current" : isLocked ? `${item.xp - progress.xp} XP away` : "Unlocked";
+      return `
+        <article class="path-card ${isActive ? "active" : ""} ${isLocked ? "locked" : ""}">
+          <strong>Lv. ${absoluteIndex + 1} ${item.title}</strong>
+          <span>${item.unlock}</span>
+          <small>${state}</small>
+        </article>
+      `;
+    })
     .join("");
 }
 
@@ -530,6 +608,19 @@ function openProModal() {
   proModal.setAttribute("aria-hidden", "false");
 }
 
+function openOnboardingModal() {
+  onboardingModal.classList.add("show");
+  onboardingModal.setAttribute("aria-hidden", "false");
+}
+
+function closeOnboardingModal(markSeen = true) {
+  onboardingModal.classList.remove("show");
+  onboardingModal.setAttribute("aria-hidden", "true");
+  if (!markSeen || progress.onboardingSeen) return;
+  progress.onboardingSeen = true;
+  saveProgress(progress);
+}
+
 function closeProModal() {
   proModal.classList.remove("show");
   proModal.setAttribute("aria-hidden", "true");
@@ -617,6 +708,43 @@ function startLevelDrill() {
       : "Level drill started: focus on one safe plan before attacking.";
   render();
   showToast(`Level drill started for Lv. ${level.number} ${level.current.title}.`);
+}
+
+function copyDemoSummary() {
+  const level = getLevelInfo(progress.xp);
+  const score = calculateStrategyScore();
+  const captures = coachEvents.filter((event) => event.player === HUMAN && event.capture).length;
+  const exposures = coachEvents.filter((event) => event.player === HUMAN && event.exposed).length;
+  const summary = [
+    "MindCheckers demo summary",
+    `Strategy score: ${score}/100`,
+    `Level: ${level.number} - ${level.current.title}`,
+    `XP: ${progress.xp}`,
+    `Games analyzed: ${progress.games}`,
+    `Captures: ${captures}`,
+    `Exposed moves: ${exposures}`,
+    "Positioning: a calm AI-style checkers trainer for strategic thinking.",
+    "Live demo: https://qu1nty9.github.io/MindCheckers/",
+  ].join("\n");
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(summary)
+      .then(() => {
+        revealSummary(summary);
+        showToast("Demo summary copied.");
+      })
+      .catch(() => revealSummary(summary));
+    return;
+  }
+
+  revealSummary(summary);
+}
+
+function revealSummary(text) {
+  summaryOutputEl.textContent = text;
+  summaryOutputEl.classList.add("show");
+  showToast("Demo summary is ready below.");
 }
 
 function setDifficulty(nextDifficulty, announce = true) {
@@ -957,6 +1085,7 @@ function normalizeProgress(saved) {
     missionClaimed: Boolean(saved.missionClaimed),
     leagueJoined: Boolean(saved.leagueJoined),
     proActive: Boolean(saved.proActive),
+    onboardingSeen: Boolean(saved.onboardingSeen),
   };
 }
 
@@ -973,6 +1102,7 @@ function defaultProgress() {
     missionClaimed: false,
     leagueJoined: false,
     proActive: false,
+    onboardingSeen: false,
   };
 }
 

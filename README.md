@@ -11,9 +11,13 @@ It is not positioned as another online checkers board. The product idea is a lig
 - Local AI opponent with three difficulty moods: Gentle, Focused, and Sharp
 - Highlighted legal moves and coach hints
 - Post-game coach review with strategy score, mistake pattern, and next drill
+- 60-second demo onboarding path for judges and first-time users
+- Move history panel for showing that the game is being analyzed
 - Progress stored in `localStorage`: XP, streak, tactics, foresight, and endgame skill bars
 - Level system with named strategy ranks, XP-to-next-level progress, and unlock messaging
+- Training path cards that make the learning progression visible
 - Interactive daily missions with claimable XP rewards
+- Copyable demo summary for pitching or sharing progress
 - Product layer preview: Pro modal, league joining, level drills, and leaderboard
 - Mobile-first responsive interface
 

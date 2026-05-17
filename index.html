@@ -111,6 +111,17 @@
               <button class="secondary-button" id="hintButton" type="button">Show hint</button>
               <button class="secondary-button" id="reviewButton" type="button">End & review</button>
             </div>
+
+            <div class="move-history" aria-label="Move history">
+              <div class="panel-heading inline-heading">
+                <div>
+                  <p class="eyebrow">Move history</p>
+                  <h2>Last moves</h2>
+                </div>
+                <span id="moveCountLabel">0 moves</span>
+              </div>
+              <ol id="moveHistoryList"></ol>
+            </div>
           </section>
 
           <aside class="side-panel review-panel" aria-labelledby="coachTitle">
@@ -119,6 +130,7 @@
               <h2 id="coachTitle">Live review</h2>
             </div>
 
+            <div class="review-spotlight" id="reviewSpotlight"></div>
             <div class="review-stack" id="reviewStack"></div>
 
             <div class="progress-block" aria-label="Skill progress">
@@ -160,6 +172,11 @@
               <span id="gameCountLabel">0 games analyzed</span>
             </div>
             <div class="insight-grid" id="insightGrid"></div>
+            <div class="training-path" id="trainingPath" aria-label="Training path"></div>
+            <div class="summary-actions">
+              <button class="primary-button" id="copySummaryButton" type="button">Copy demo summary</button>
+            </div>
+            <pre class="summary-output" id="summaryOutput" aria-live="polite"></pre>
           </div>
 
           <div class="side-panel leaderboard-panel">
@@ -175,6 +192,31 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div class="modal-backdrop" id="onboardingModal" aria-hidden="true">
+      <section class="modal onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+        <p class="eyebrow">60-second demo path</p>
+        <h2 id="onboardingTitle">Play one move, ask for a hint, then open the coach review.</h2>
+        <div class="onboarding-steps">
+          <div>
+            <strong>1</strong>
+            <span>Move a green piece</span>
+          </div>
+          <div>
+            <strong>2</strong>
+            <span>Use Show hint</span>
+          </div>
+          <div>
+            <strong>3</strong>
+            <span>End & review</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button" id="startDemoButton" type="button">Start training</button>
+          <button class="secondary-button" id="skipOnboardingButton" type="button">Skip</button>
+        </div>
+      </section>
     </div>
 
     <div class="modal-backdrop" id="proModal" aria-hidden="true">
