@@ -29,6 +29,26 @@ We are building a strategic thinking trainer powered by checkers gameplay and AI
 
 The market gap is that most checkers products focus on basic play, simple ads, or old multiplayer hubs. MindCheckers borrows the retention loop of Duolingo and the learning loop of Chess.com, but keeps the experience calm and focused.
 
+## Requirement Coverage
+
+The prototype intentionally targets the "Great" path from the brief while staying realistic for a short deadline.
+
+- Core game: 8x8 board, legal movement, mandatory captures, multi-jumps, kings, and winner detection.
+- Strong product layer: local AI opponent, three difficulty levels, hints, move history, responsive layout, and saved progress.
+- Great-level differentiation: AI-style coach review, unique niche around strategic thinking, level system, daily missions, league preview, and Upgrade to Pro flow.
+- Delivery requirements: live GitHub Pages project, GitHub repository, and product README explaining what was built, for whom, and why it is valuable.
+
+## Business Logic
+
+MindCheckers is built around a retention loop rather than a one-off game:
+
+1. Play a short training match.
+2. Receive a review with strategy score, skill breakdown, mistakes, and next drill.
+3. Earn XP, progress through named strategy levels, and complete missions.
+4. Return for daily streaks, league ranking, and Pro-style deeper analysis.
+
+The monetization path is visible in the prototype through the Pro preview: deeper reviews, unlimited level drills, seasonal leagues, and future cosmetic board themes.
+
 ## Target User
 
 People who want to train strategic thinking with short, low-friction games.
@@ -41,7 +61,7 @@ This prototype is intentionally static: no backend, no install step, no external
 
 Open `index.html` in a browser to run the app.
 
-The local AI is heuristic-based. The coach is rule-based and analyzes move history for captures, exposed pieces, promotion, material, and safety. This keeps the demo stable within a short deadline while still showing the intended product loop.
+The local AI is heuristic-based. The coach is rule-based and analyzes move history for captures, exposed pieces, promotion, material, tempo, safety, and endgame conversion. This keeps the demo stable within a short deadline while still showing the intended product loop.
 
 ## Roadmap
 

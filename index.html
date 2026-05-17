@@ -8,7 +8,7 @@
       name="description"
       content="A calm Duolingo-style checkers trainer for strategic thinking, local AI games, post-game coaching, and progress tracking."
     />
-    <link rel="stylesheet" href="styles.css?v=20260517-polish" />
+    <link rel="stylesheet" href="styles.css?v=20260517-review" />
   </head>
   <body>
     <div class="app-shell">
@@ -132,6 +132,7 @@
 
             <div class="review-spotlight" id="reviewSpotlight"></div>
             <div class="review-stack" id="reviewStack"></div>
+            <div class="review-breakdown" id="reviewBreakdown" aria-label="Game review breakdown"></div>
 
             <div class="progress-block" aria-label="Skill progress">
               <div class="progress-title">
@@ -191,6 +192,42 @@
             </div>
           </div>
         </section>
+
+        <section class="business-grid" aria-label="Business logic and requirements coverage">
+          <article class="wide-panel business-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Business logic</p>
+              <h2>Retention engine</h2>
+            </div>
+            <div class="business-cards">
+              <div>
+                <strong>Learning loop</strong>
+                <p>Play a short game, get a review, earn XP, unlock the next drill.</p>
+              </div>
+              <div>
+                <strong>Monetization path</strong>
+                <p>Pro review, unlimited drills, leagues, and cosmetic board themes.</p>
+              </div>
+              <div>
+                <strong>Market position</strong>
+                <p>Not “play checkers online”, but a calm trainer for strategic thinking.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="side-panel coverage-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Requirement level</p>
+              <h2>Great path</h2>
+            </div>
+            <ul class="coverage-list">
+              <li><strong>Rules</strong><span>8x8, captures, kings, winner detection</span></li>
+              <li><strong>AI</strong><span>3 local difficulty modes plus hints</span></li>
+              <li><strong>Coach</strong><span>Post-game analysis and next drill</span></li>
+              <li><strong>Product</strong><span>Levels, missions, Pro preview, league</span></li>
+            </ul>
+          </article>
+        </section>
       </main>
     </div>
 
@@ -244,6 +281,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="app.js?v=20260517-polish"></script>
+    <script src="app.js?v=20260517-review"></script>
   </body>
 </html>

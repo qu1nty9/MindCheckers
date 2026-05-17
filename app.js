@@ -21,6 +21,7 @@ const endgameBarEl = document.querySelector("#endgameBar");
 const gameCountLabelEl = document.querySelector("#gameCountLabel");
 const toastEl = document.querySelector("#toast");
 const reviewSpotlightEl = document.querySelector("#reviewSpotlight");
+const reviewBreakdownEl = document.querySelector("#reviewBreakdown");
 const moveHistoryListEl = document.querySelector("#moveHistoryList");
 const moveCountLabelEl = document.querySelector("#moveCountLabel");
 const trainingPathEl = document.querySelector("#trainingPath");
@@ -172,6 +173,7 @@ function render() {
   renderMoveHistory();
   renderReviewSpotlight();
   renderReview();
+  renderReviewBreakdown();
   renderProgress();
   renderMission();
   renderInsights();
@@ -273,9 +275,10 @@ function renderReviewSpotlight() {
   const level = getLevelInfo(progress.xp);
   const captures = coachEvents.filter((event) => event.player === HUMAN && event.capture).length;
   const exposures = coachEvents.filter((event) => event.player === HUMAN && event.exposed).length;
+  const verdict = getReviewVerdict(score, captures, exposures);
   const message =
     gameState === "ended"
-      ? `${captures} captures, ${exposures} exposed moves, Lv. ${level.number} ${level.current.title}.`
+      ? `${verdict}. ${captures} captures, ${exposures} exposed moves, Lv. ${level.number} ${level.current.title}.`
       : "Your review will summarize tactics, safety, level progress, and the next drill.";
 
   reviewSpotlightEl.innerHTML = `
@@ -285,6 +288,21 @@ function renderReviewSpotlight() {
       <span>${message}</span>
     </div>
   `;
+}
+
+function renderReviewBreakdown() {
+  const breakdown = calculateReviewBreakdown();
+  reviewBreakdownEl.innerHTML = breakdown
+    .map(
+      (item) => `
+        <div class="breakdown-row">
+          <span>${item.label}</span>
+          <div class="breakdown-track"><i style="width: ${item.score}%"></i></div>
+          <strong>${item.score}</strong>
+        </div>
+      `,
+    )
+    .join("");
 }
 
 function renderMoveHistory() {
@@ -568,7 +586,7 @@ function finishGame(winner) {
 
     progress.games += 1;
     progress.wins += humanWon ? 1 : 0;
-    progress.streak = reviewOnly || humanWon ? progress.streak + 1 : 0;
+    updateTrainingStreak(progress);
     progress.xp += xpGain;
     progress.tactics = clamp(progress.tactics + captures * 4 + (humanWon ? 3 : 1), 0, 100);
     progress.foresight = clamp(progress.foresight + Math.max(1, 5 - exposures), 0, 100);
@@ -920,6 +938,9 @@ function getCoachCards() {
     const exposures = events.filter((event) => event.exposed).length;
     const captures = events.filter((event) => event.capture).length;
     const promotions = events.filter((event) => event.becameKing).length;
+    const breakdown = calculateReviewBreakdown();
+    const strongest = [...breakdown].sort((a, b) => b.score - a.score)[0];
+    const weakest = [...breakdown].sort((a, b) => a.score - b.score)[0];
 
     const cards = [
       {
@@ -933,6 +954,10 @@ function getCoachCards() {
         body: exposures
           ? `You left ${exposures} piece${exposures > 1 ? "s" : ""} open to immediate capture. Pause for one reply before each move.`
           : "You kept your pieces relatively safe after moving, which protects long-term plans.",
+      },
+      {
+        title: "Skill diagnosis",
+        body: `Strongest area: ${strongest.label.toLowerCase()} (${strongest.score}/100). Focus area: ${weakest.label.toLowerCase()} (${weakest.score}/100).`,
       },
       {
         title: "Next drill",
@@ -1022,6 +1047,10 @@ function buildSummary() {
           ? "Endgame conversion is next: use kings to squeeze the board."
           : "The next unlock is foresight: predict the reply before each move.",
     },
+    {
+      title: "Business signal",
+      body: "The product loop is visible: game input, AI-style feedback, XP, missions, and a Pro upgrade path.",
+    },
   ];
 }
 
@@ -1032,6 +1061,30 @@ function calculateStrategyScore() {
   const exposed = humanEvents.filter((event) => event.exposed).length;
   const promotions = humanEvents.filter((event) => event.becameKing).length;
   return clamp(62 + material * 4 + captures * 7 + promotions * 9 - exposed * 8, 35, 96);
+}
+
+function calculateReviewBreakdown() {
+  const material = evaluateMaterial(board, HUMAN) - evaluateMaterial(board, AI);
+  const humanEvents = coachEvents.filter((event) => event.player === HUMAN);
+  const captures = humanEvents.filter((event) => event.capture).length;
+  const exposed = humanEvents.filter((event) => event.exposed).length;
+  const promotions = humanEvents.filter((event) => event.becameKing).length;
+  const humanMoves = getAllMoves(board, HUMAN).length;
+  const aiMoves = getAllMoves(board, AI).length;
+
+  return [
+    { label: "Tactics", score: clamp(54 + captures * 14 + material * 3, 25, 98) },
+    { label: "Safety", score: clamp(82 - exposed * 18, 20, 98) },
+    { label: "Tempo", score: clamp(58 + (humanMoves - aiMoves) * 4, 25, 96) },
+    { label: "Endgame", score: clamp(45 + promotions * 25 + Math.max(0, material) * 5, 25, 96) },
+  ];
+}
+
+function getReviewVerdict(score, captures, exposures) {
+  if (score >= 82) return "Strong strategic game";
+  if (captures > exposures) return "Good tactical pressure";
+  if (exposures >= 2) return "Main leak: reply awareness";
+  return "Solid training sample";
 }
 
 function getLiveTip() {
@@ -1078,14 +1131,17 @@ function loadProgress() {
 }
 
 function normalizeProgress(saved) {
+  const hasDailyStreakDate = typeof saved.lastPlayedDate === "string" && saved.lastPlayedDate;
   return {
     ...defaultProgress(),
     ...saved,
+    streak: hasDailyStreakDate ? Number(saved.streak) || 0 : 0,
     activeMissionIndex: Number.isInteger(saved.activeMissionIndex) ? saved.activeMissionIndex : 0,
     missionClaimed: Boolean(saved.missionClaimed),
     leagueJoined: Boolean(saved.leagueJoined),
     proActive: Boolean(saved.proActive),
     onboardingSeen: Boolean(saved.onboardingSeen),
+    lastPlayedDate: hasDailyStreakDate ? saved.lastPlayedDate : "",
   };
 }
 
@@ -1103,6 +1159,7 @@ function defaultProgress() {
     leagueJoined: false,
     proActive: false,
     onboardingSeen: false,
+    lastPlayedDate: "",
   };
 }
 
@@ -1142,6 +1199,28 @@ function clamp(value, min, max) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function updateTrainingStreak(nextProgress) {
+  const today = getLocalDateKey();
+  if (nextProgress.lastPlayedDate === today) return;
+
+  const yesterday = getDateKeyOffset(-1);
+  nextProgress.streak = nextProgress.lastPlayedDate === yesterday ? nextProgress.streak + 1 : 1;
+  nextProgress.lastPlayedDate = today;
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDateKeyOffset(offsetDays) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return getLocalDateKey(date);
 }
 
 function showToast(message) {
