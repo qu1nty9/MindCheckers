@@ -42,6 +42,7 @@ const upgradeButton = document.querySelector("#upgradeButton");
 const themeButton = document.querySelector("#themeButton");
 const profileButton = document.querySelector("#profileButton");
 const inviteButton = document.querySelector("#inviteButton");
+const cloudStatusEl = document.querySelector("#cloudStatus");
 const proModal = document.querySelector("#proModal");
 const closeProModalButton = document.querySelector("#closeProModal");
 const activateProButton = document.querySelector("#activateProButton");
@@ -49,6 +50,16 @@ const profileModal = document.querySelector("#profileModal");
 const closeProfileModalButton = document.querySelector("#closeProfileModal");
 const saveProfileButton = document.querySelector("#saveProfileButton");
 const playerNameInput = document.querySelector("#playerNameInput");
+const authEmailInput = document.querySelector("#authEmailInput");
+const authButton = document.querySelector("#authButton");
+const signOutButton = document.querySelector("#signOutButton");
+const authStatusEl = document.querySelector("#authStatus");
+const replayModal = document.querySelector("#replayModal");
+const closeReplayModalButton = document.querySelector("#closeReplayModal");
+const replayBoardEl = document.querySelector("#replayBoard");
+const replayMoveLabelEl = document.querySelector("#replayMoveLabel");
+const replayPrevButton = document.querySelector("#replayPrevButton");
+const replayNextButton = document.querySelector("#replayNextButton");
 const onboardingModal = document.querySelector("#onboardingModal");
 const startDemoButton = document.querySelector("#startDemoButton");
 const skipOnboardingButton = document.querySelector("#skipOnboardingButton");
@@ -64,11 +75,22 @@ let gameState = "playing";
 let difficulty = "gentle";
 let lastMove = null;
 let moveLog = [];
+let boardSnapshots = [cloneBoard(board)];
 let coachEvents = [];
 let resultSaved = false;
+let activeReplay = null;
+let supabaseClient = null;
+let authUser = null;
+let cloudLeaderboardRows = [];
+let onlineRoom = "";
+let realtimeChannel = null;
+let applyingRemoteState = false;
+const clientId = Math.random().toString(36).slice(2);
 let progress = loadProgress();
 let gameMode = progress.gameMode || "ai";
-if (new URLSearchParams(location.search).get("mode") === "friend") {
+const urlParams = new URLSearchParams(location.search);
+const requestedRoom = normalizeRoomCode(urlParams.get("room"));
+if (urlParams.get("mode") === "friend" || requestedRoom) {
   gameMode = "friend";
   progress.gameMode = "friend";
 }
@@ -141,11 +163,19 @@ upgradeButton.addEventListener("click", openProModal);
 closeProModalButton.addEventListener("click", closeProModal);
 closeProfileModalButton.addEventListener("click", closeProfileModal);
 saveProfileButton.addEventListener("click", saveProfile);
+authButton.addEventListener("click", signInWithEmail);
+signOutButton.addEventListener("click", signOut);
+closeReplayModalButton.addEventListener("click", closeReplayModal);
+replayPrevButton.addEventListener("click", () => stepReplay(-1));
+replayNextButton.addEventListener("click", () => stepReplay(1));
 proModal.addEventListener("click", (event) => {
   if (event.target === proModal) closeProModal();
 });
 profileModal.addEventListener("click", (event) => {
   if (event.target === profileModal) closeProfileModal();
+});
+replayModal.addEventListener("click", (event) => {
+  if (event.target === replayModal) closeReplayModal();
 });
 activateProButton.addEventListener("click", activateProPreview);
 claimMissionButton.addEventListener("click", claimMissionReward);
@@ -163,11 +193,18 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeProModal();
     closeProfileModal();
+    closeReplayModal();
     closeOnboardingModal(false);
   }
 });
 
 gameArchiveListEl.addEventListener("click", (event) => {
+  const replayButton = event.target.closest("[data-replay-id]");
+  if (replayButton) {
+    openReplay(Number(replayButton.dataset.replayId));
+    return;
+  }
+
   const button = event.target.closest("[data-archive-id]");
   if (!button) return;
   showArchivedReview(Number(button.dataset.archiveId));
@@ -191,9 +228,18 @@ document.querySelectorAll("[data-city]").forEach((button) => {
   });
 });
 
+document.querySelectorAll("[data-skin]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setBoardSkin(button.dataset.skin);
+  });
+});
+
 applyTheme(progress.theme);
+applyBoardSkin(progress.boardSkin);
 applyGameMode(gameMode);
 render();
+initializeCloud();
+if (requestedRoom) joinRealtimeRoom(requestedRoom);
 if (!progress.onboardingSeen) openOnboardingModal();
 
 function createInitialBoard() {
@@ -221,6 +267,7 @@ function startNewGame() {
   gameState = "playing";
   lastMove = null;
   moveLog = [];
+  boardSnapshots = [cloneBoard(board)];
   coachEvents = [];
   resultSaved = false;
   render();
@@ -467,13 +514,21 @@ function renderGameArchive() {
 
   gameArchiveListEl.innerHTML = history
     .map(
-      (item) => `
+      (item) => {
+        const hasReplay = hasReplaySnapshots(item);
+        return `
         <article class="archive-item">
           <strong>${item.score}/100 | ${item.modeLabel} | ${item.result}</strong>
           <span>${item.date} | ${item.levelTitle} | ${item.moves} moves | ${item.focus}</span>
-          <button class="secondary-button" type="button" data-archive-id="${item.id}">View review</button>
+          <div class="archive-actions">
+            <button class="secondary-button" type="button" data-archive-id="${item.id}">View review</button>
+            <button class="secondary-button" type="button" data-replay-id="${item.id}" ${hasReplay ? "" : "disabled"}>
+              Replay
+            </button>
+          </div>
         </article>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -481,12 +536,18 @@ function renderGameArchive() {
 function renderLeaderboard() {
   const level = getLevelInfo(progress.xp);
   const cityRows = CITY_LEADERBOARDS[progress.city] || CITY_LEADERBOARDS.Almaty;
+  const cloudRows = cloudLeaderboardRows.length
+    ? cloudLeaderboardRows.map((row) => ({
+        name: row.player_name,
+        detail: `${row.xp} XP | ${row.level_title} | ${row.city}`,
+      }))
+    : [];
   const rows = [
     {
       name: progress.leagueJoined ? progress.playerName : `${progress.playerName} (not joined)`,
-      detail: `${progress.xp} XP | Lv. ${level.number} ${level.current.title} | ${progress.city}`,
+      detail: `${progress.xp} XP | Lv. ${level.number} ${level.current.title} | ${progress.city}${authUser ? " | cloud" : ""}`,
     },
-    ...cityRows,
+    ...(cloudRows.length ? cloudRows : cityRows),
   ];
 
   leaderboardEl.innerHTML = rows
@@ -510,8 +571,12 @@ function renderProductState() {
   leagueButton.textContent = progress.leagueJoined ? "League joined" : "Join league";
   leagueButton.disabled = progress.leagueJoined;
   inviteButton.textContent = gameMode === "friend" ? "Invite friend" : "Friend invite";
+  renderCloudState();
   document.querySelectorAll("[data-city]").forEach((item) => {
     item.classList.toggle("active", item.dataset.city === progress.city);
+  });
+  document.querySelectorAll("[data-skin]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.skin === progress.boardSkin);
   });
 }
 
@@ -549,6 +614,7 @@ function playPlayerMove(move) {
   const event = applyMove(board, move, movingPlayer);
   coachEvents.push(event);
   moveLog.push(formatMove(getMoveLabel(movingPlayer), move));
+  boardSnapshots.push(cloneBoard(board));
   selected = null;
   legalMoves = [];
   hintMove = null;
@@ -561,6 +627,7 @@ function playPlayerMove(move) {
     selected = { ...move.to };
     legalMoves = chainMoves;
     liveTipEl.textContent = "Nice capture. A follow-up jump is available from the same piece.";
+    broadcastGameState("capture-chain");
     render();
     return;
   }
@@ -574,6 +641,7 @@ function playPlayerMove(move) {
     currentPlayer = opponent(movingPlayer);
     liveTipEl.textContent =
       currentPlayer === HUMAN ? "Green to move. Look for a safe route." : "Coral to move. Try to answer the threat.";
+    broadcastGameState("move");
     render();
     return;
   }
@@ -594,6 +662,7 @@ function playAiTurn() {
     const event = applyMove(board, move, AI);
     coachEvents.push(event);
     moveLog.push(formatMove("AI", move));
+    boardSnapshots.push(cloneBoard(board));
     chainGuard += 1;
 
     const movedPiece = board[move.to.row][move.to.col];
@@ -608,6 +677,7 @@ function playAiTurn() {
   if (!checkGameOver()) currentPlayer = HUMAN;
   liveTipEl.textContent = getLiveTip();
   render();
+  broadcastGameState("review");
 }
 
 function applyMove(targetBoard, move, player) {
@@ -734,6 +804,8 @@ function openProModal() {
 
 function openProfileModal() {
   playerNameInput.value = progress.playerName;
+  authEmailInput.value = authUser?.email || "";
+  renderCloudState();
   profileModal.classList.add("show");
   profileModal.setAttribute("aria-hidden", "false");
 }
@@ -761,10 +833,134 @@ function closeProModal() {
   proModal.setAttribute("aria-hidden", "true");
 }
 
+async function initializeCloud() {
+  const config = getSupabaseConfig();
+  if (!config) {
+    renderCloudState();
+    return;
+  }
+
+  if (!window.supabase?.createClient) {
+    cloudStatusEl.textContent = "Cloud: Supabase SDK unavailable";
+    return;
+  }
+
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+
+  const { data } = await supabaseClient.auth.getSession();
+  authUser = data.session?.user || null;
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    authUser = session?.user || null;
+    if (authUser) hydrateCloudProfile();
+    renderProductState();
+    loadCloudLeaderboard();
+  });
+
+  if (authUser) await hydrateCloudProfile();
+  await loadCloudLeaderboard();
+  renderProductState();
+}
+
+function getSupabaseConfig() {
+  const config = window.MINDCHECKERS_CONFIG?.supabase;
+  const url = config?.url?.trim();
+  const anonKey = config?.anonKey?.trim();
+  if (!url || !anonKey || !url.startsWith("http") || anonKey.length < 20) return null;
+  return { url, anonKey };
+}
+
+function renderCloudState() {
+  const roomLabel = onlineRoom ? ` | room ${onlineRoom}` : "";
+  if (!supabaseClient) {
+    cloudStatusEl.textContent = `Cloud: demo mode${onlineRoom ? ` | preview room ${onlineRoom}` : ""}`;
+    authStatusEl.textContent = "Supabase is not configured yet.";
+    authButton.disabled = true;
+    signOutButton.disabled = true;
+    return;
+  }
+
+  cloudStatusEl.textContent = authUser
+    ? `Cloud: signed in${roomLabel}`
+    : `Cloud: ready, sign in${roomLabel}`;
+  authStatusEl.textContent = authUser ? `Signed in as ${authUser.email}.` : "Supabase is configured. Use email magic link.";
+  authButton.disabled = false;
+  signOutButton.disabled = !authUser;
+}
+
+async function hydrateCloudProfile() {
+  if (!supabaseClient || !authUser) return;
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("player_name, city, xp, streak, pro_active, board_skin, progress")
+    .eq("user_id", authUser.id)
+    .maybeSingle();
+
+  if (error) {
+    showToast("Cloud profile could not load. Local progress is still safe.");
+    return;
+  }
+
+  if (data) {
+    progress = normalizeProgress({
+      ...progress,
+      ...data.progress,
+      playerName: data.player_name || progress.playerName,
+      city: data.city || progress.city,
+      xp: Number(data.xp) || progress.xp,
+      streak: Number(data.streak) || progress.streak,
+      proActive: Boolean(data.pro_active),
+      boardSkin: data.board_skin || progress.boardSkin,
+    });
+    saveLocalProgress(progress);
+    gameMode = progress.gameMode;
+    applyTheme(progress.theme);
+    applyBoardSkin(progress.boardSkin);
+    applyGameMode(gameMode);
+    render();
+  } else {
+    await syncProfileToCloud();
+  }
+}
+
+async function signInWithEmail() {
+  if (!supabaseClient) {
+    showToast("Fill config.js with Supabase URL and anon key first.");
+    return;
+  }
+
+  const email = authEmailInput.value.trim();
+  if (!email.includes("@")) {
+    showToast("Enter a valid email for the magic link.");
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: location.href.split("#")[0] },
+  });
+
+  if (error) {
+    showToast("Magic link failed. Check Supabase auth settings.");
+    return;
+  }
+
+  showToast("Magic link sent. Check your email.");
+}
+
+async function signOut() {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  authUser = null;
+  renderProductState();
+  showToast("Signed out.");
+}
+
 function saveProfile() {
   const nextName = playerNameInput.value.trim() || "Strategy learner";
   progress.playerName = nextName.slice(0, 24);
   saveProgress(progress);
+  syncProfileToCloud();
+  upsertLeaderboardScore();
   closeProfileModal();
   render();
   showToast("Local profile saved.");
@@ -776,8 +972,12 @@ function activateProPreview() {
   progress.proActive = true;
   progress.xp += 24;
   progress.foresight = clamp(progress.foresight + 4, 0, 100);
+  if (progress.boardSkin === "classic") progress.boardSkin = "ocean";
   saveProgress(progress);
+  unlockCloudSkin(progress.boardSkin);
+  upsertLeaderboardScore();
   closeProModal();
+  applyBoardSkin(progress.boardSkin);
   render();
 
   const levelAfter = getLevelInfo(progress.xp).number;
@@ -831,6 +1031,8 @@ function joinLeague() {
   progress.leagueJoined = true;
   progress.xp += 12;
   saveProgress(progress);
+  upsertLeaderboardScore();
+  loadCloudLeaderboard();
   render();
 
   const levelAfter = getLevelInfo(progress.xp).number;
@@ -885,9 +1087,31 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
 }
 
+function setBoardSkin(skin) {
+  const nextSkin = ["classic", "ocean", "royal"].includes(skin) ? skin : "classic";
+  if (nextSkin !== "classic" && !progress.proActive) {
+    openProModal();
+    showToast("Ocean and Royal skins are part of the Pro path.");
+    return;
+  }
+
+  progress.boardSkin = nextSkin;
+  saveProgress(progress);
+  applyBoardSkin(nextSkin);
+  unlockCloudSkin(nextSkin);
+  renderProductState();
+  showToast(`${capitalize(nextSkin)} board skin enabled.`);
+}
+
+function applyBoardSkin(skin) {
+  document.documentElement.dataset.skin = ["ocean", "royal"].includes(skin) ? skin : "classic";
+}
+
 function setCity(city) {
   progress.city = city;
   saveProgress(progress);
+  upsertLeaderboardScore();
+  loadCloudLeaderboard();
   renderLeaderboard();
   renderProductState();
   showToast(`${city} leaderboard selected.`);
@@ -898,17 +1122,181 @@ function createFriendInvite() {
     setGameMode("friend", false);
   }
 
-  const roomCode = `MC-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const roomCode = onlineRoom || `MC-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  joinRealtimeRoom(roomCode);
   const invite = `${location.origin}${location.pathname}?mode=friend&room=${roomCode}`;
   revealSummary(
     [
       "MindCheckers friend invite",
       `Room code: ${roomCode}`,
       invite,
-      "Prototype note: this is a pass-and-play preview. WebSocket rooms are the next backend step.",
+      supabaseClient
+        ? "Realtime note: this room uses Supabase WebSocket broadcast when config.js is active."
+        : "Setup note: fill config.js with Supabase credentials to turn this preview into a realtime WebSocket room.",
     ].join("\n"),
   );
   showToast(`Invite ready: ${roomCode}.`);
+}
+
+async function joinRealtimeRoom(roomCode) {
+  onlineRoom = normalizeRoomCode(roomCode);
+  if (!onlineRoom) return;
+
+  if (!supabaseClient) {
+    renderProductState();
+    return;
+  }
+
+  if (realtimeChannel) {
+    await supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+
+  realtimeChannel = supabaseClient
+    .channel(`mindcheckers-room-${onlineRoom}`, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: clientId },
+      },
+    })
+    .on("broadcast", { event: "state" }, ({ payload }) => applyRemoteGameState(payload))
+    .on("presence", { event: "sync" }, renderCloudState)
+    .subscribe(async (status) => {
+      if (status !== "SUBSCRIBED") return;
+      await realtimeChannel.track({
+        player: progress.playerName,
+        city: progress.city,
+        joinedAt: new Date().toISOString(),
+      });
+      broadcastGameState("room-sync");
+      renderProductState();
+      showToast(`Realtime room connected: ${onlineRoom}.`);
+    });
+
+  renderProductState();
+}
+
+function broadcastGameState(reason) {
+  if (applyingRemoteState || gameMode !== "friend" || !onlineRoom || !realtimeChannel) return;
+
+  realtimeChannel.send({
+    type: "broadcast",
+    event: "state",
+    payload: {
+      clientId,
+      room: onlineRoom,
+      reason,
+      board: cloneBoard(board),
+      currentPlayer,
+      gameState,
+      lastMove,
+      moveLog: moveLog.slice(),
+      boardSnapshots: boardSnapshots.map(cloneBoard),
+      coachEvents: coachEvents.map((event) => ({ ...event })),
+      resultSaved,
+      playerName: progress.playerName,
+    },
+  });
+}
+
+function applyRemoteGameState(payload) {
+  if (!payload || payload.clientId === clientId || payload.room !== onlineRoom || !isBoardSnapshot(payload.board)) return;
+
+  applyingRemoteState = true;
+  board = cloneBoard(payload.board);
+  currentPlayer = payload.currentPlayer;
+  gameState = payload.gameState === "ended" ? "ended" : "playing";
+  lastMove = payload.lastMove || null;
+  moveLog = Array.isArray(payload.moveLog) ? payload.moveLog.slice() : [];
+  boardSnapshots = Array.isArray(payload.boardSnapshots) && payload.boardSnapshots.every(isBoardSnapshot)
+    ? payload.boardSnapshots.map(cloneBoard)
+    : [cloneBoard(board)];
+  coachEvents = Array.isArray(payload.coachEvents) ? payload.coachEvents.map((event) => ({ ...event })) : [];
+  resultSaved = Boolean(payload.resultSaved);
+  selected = null;
+  legalMoves = [];
+  hintMove = null;
+  liveTipEl.textContent = `${payload.playerName || "Friend"} synced the room. ${getMoveLabel(currentPlayer)} to move.`;
+  render();
+  applyingRemoteState = false;
+}
+
+async function syncProfileToCloud() {
+  if (!supabaseClient || !authUser) return;
+  const level = getLevelInfo(progress.xp);
+  await supabaseClient.from("profiles").upsert(
+    {
+      user_id: authUser.id,
+      player_name: progress.playerName,
+      city: progress.city,
+      xp: progress.xp,
+      streak: progress.streak,
+      pro_active: progress.proActive,
+      board_skin: progress.boardSkin,
+      progress,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  await supabaseClient.from("leaderboard_entries").upsert(
+    {
+      user_id: authUser.id,
+      player_name: progress.playerName,
+      city: progress.city,
+      xp: progress.xp,
+      level_title: `Lv. ${level.number} ${level.current.title}`,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+}
+
+async function upsertLeaderboardScore() {
+  if (!supabaseClient || !authUser) return;
+  await syncProfileToCloud();
+  await loadCloudLeaderboard();
+}
+
+async function loadCloudLeaderboard() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("leaderboard_entries")
+    .select("player_name, city, xp, level_title")
+    .eq("city", progress.city)
+    .order("xp", { ascending: false })
+    .limit(8);
+
+  cloudLeaderboardRows = error ? [] : data || [];
+  renderLeaderboard();
+}
+
+async function saveGameReviewToCloud(item) {
+  if (!supabaseClient || !authUser) return;
+  await supabaseClient.from("game_reviews").insert({
+    user_id: authUser.id,
+    player_name: progress.playerName,
+    city: progress.city,
+    score: item.score,
+    result: item.result,
+    mode_label: item.modeLabel,
+    level_title: item.levelTitle,
+    focus: item.focus,
+    move_count: item.moves,
+    moves: item.movesFull,
+    snapshots: item.snapshots,
+  });
+}
+
+async function unlockCloudSkin(skin) {
+  if (!supabaseClient || !authUser || skin === "classic") return;
+  await supabaseClient.from("skin_unlocks").upsert(
+    {
+      user_id: authUser.id,
+      skin_id: skin,
+      source: progress.proActive ? "pro_preview" : "local_preview",
+    },
+    { onConflict: "user_id,skin_id" },
+  );
 }
 
 function saveGameReview(winner) {
@@ -926,25 +1314,29 @@ function saveGameReview(winner) {
           ? "Coral win"
           : "Loss";
 
-  progress.gameHistory = [
-    {
-      id: Date.now(),
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      score: calculateStrategyScore(),
-      moves: moveLog.length,
-      result,
-      modeLabel: gameMode === "friend" ? "Friend" : `AI ${capitalize(difficulty)}`,
-      levelTitle: `Lv. ${level.number} ${level.current.title}`,
-      focus: `Next focus: ${weakest.label}`,
-      movesPreview: moveLog.slice(-8),
-    },
-    ...progress.gameHistory,
-  ].slice(0, 8);
+  const reviewItem = {
+    id: Date.now(),
+    date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    score: calculateStrategyScore(),
+    moves: moveLog.length,
+    result,
+    modeLabel: gameMode === "friend" ? "Friend" : `AI ${capitalize(difficulty)}`,
+    levelTitle: `Lv. ${level.number} ${level.current.title}`,
+    focus: `Next focus: ${weakest.label}`,
+    movesFull: moveLog.slice(),
+    movesPreview: moveLog.slice(-8),
+    snapshots: boardSnapshots.map(cloneBoard),
+  };
+
+  progress.gameHistory = [reviewItem, ...progress.gameHistory].slice(0, 8);
+  saveGameReviewToCloud(reviewItem);
+  upsertLeaderboardScore();
 }
 
 function showArchivedReview(id) {
   const item = progress.gameHistory.find((game) => game.id === id);
   if (!item) return;
+  const storedMoves = getStoredMoveList(item);
 
   revealSummary(
     [
@@ -952,9 +1344,74 @@ function showArchivedReview(id) {
       `${item.score}/100 | ${item.modeLabel} | ${item.result}`,
       `${item.date} | ${item.levelTitle}`,
       item.focus,
-      item.movesPreview?.length ? `Moves: ${item.movesPreview.join(", ")}` : "Moves: no stored moves",
+      storedMoves.length ? `Moves: ${storedMoves.slice(-8).join(", ")}` : "Moves: no stored moves",
     ].join("\n"),
   );
+}
+
+function openReplay(id) {
+  const item = progress.gameHistory.find((game) => game.id === id);
+  if (!item || !hasReplaySnapshots(item)) {
+    showToast("Replay is available for newly saved games.");
+    return;
+  }
+
+  activeReplay = { item, index: 0 };
+  replayModal.classList.add("show");
+  replayModal.setAttribute("aria-hidden", "false");
+  renderReplay();
+}
+
+function closeReplayModal() {
+  replayModal.classList.remove("show");
+  replayModal.setAttribute("aria-hidden", "true");
+  activeReplay = null;
+}
+
+function stepReplay(direction) {
+  if (!activeReplay) return;
+  const maxIndex = activeReplay.item.snapshots.length - 1;
+  activeReplay.index = clamp(activeReplay.index + direction, 0, maxIndex);
+  renderReplay();
+}
+
+function renderReplay() {
+  if (!activeReplay) return;
+  const { item, index } = activeReplay;
+  const maxMove = item.snapshots.length - 1;
+  const storedMoves = getStoredMoveList(item);
+  const moveLabel = index === 0 ? "Start position" : storedMoves[index - 1] || `Move ${index}`;
+
+  renderReplayBoard(item.snapshots[index]);
+  replayMoveLabelEl.textContent = `${index}/${maxMove} | ${moveLabel}`;
+  replayPrevButton.disabled = index === 0;
+  replayNextButton.disabled = index === maxMove;
+}
+
+function renderReplayBoard(snapshot) {
+  replayBoardEl.innerHTML = "";
+
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      const cell = document.createElement("div");
+      const piece = snapshot[row]?.[col];
+      cell.className = ["replay-cell", isDarkSquare(row, col) ? "dark" : "light"]
+        .filter(Boolean)
+        .join(" ");
+      cell.setAttribute("aria-label", `${squareName(row, col)} ${piece ? piece.player : "empty"}`);
+
+      if (piece) {
+        const pieceEl = document.createElement("span");
+        pieceEl.className = ["piece", piece.player, piece.king ? "king" : ""]
+          .filter(Boolean)
+          .join(" ");
+        pieceEl.setAttribute("aria-hidden", "true");
+        cell.append(pieceEl);
+      }
+
+      replayBoardEl.append(cell);
+    }
+  }
 }
 
 function copyDemoSummary() {
@@ -1348,6 +1805,28 @@ function cloneBoard(sourceBoard) {
   return sourceBoard.map((row) => row.map((piece) => (piece ? { ...piece } : null)));
 }
 
+function isBoardSnapshot(snapshot) {
+  return (
+    Array.isArray(snapshot) &&
+    snapshot.length === BOARD_SIZE &&
+    snapshot.every((row) => Array.isArray(row) && row.length === BOARD_SIZE)
+  );
+}
+
+function hasReplaySnapshots(item) {
+  return (
+    Array.isArray(item?.snapshots) &&
+    item.snapshots.length > 0 &&
+    item.snapshots.every(isBoardSnapshot)
+  );
+}
+
+function getStoredMoveList(item) {
+  if (Array.isArray(item.movesFull)) return item.movesFull;
+  if (Array.isArray(item.movesPreview)) return item.movesPreview;
+  return [];
+}
+
 function loadProgress() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -1376,6 +1855,7 @@ function normalizeProgress(saved) {
     city: ["Almaty", "Moscow", "San Francisco"].includes(saved.city) ? saved.city : "Almaty",
     gameHistory: Array.isArray(saved.gameHistory) ? saved.gameHistory.slice(0, 8) : [],
     playerName: typeof saved.playerName === "string" && saved.playerName.trim() ? saved.playerName : "You",
+    boardSkin: ["classic", "ocean", "royal"].includes(saved.boardSkin) ? saved.boardSkin : "classic",
   };
 }
 
@@ -1399,11 +1879,17 @@ function defaultProgress() {
     city: "Almaty",
     gameHistory: [],
     playerName: "You",
+    boardSkin: "classic",
   };
 }
 
-function saveProgress(nextProgress) {
+function saveLocalProgress(nextProgress) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nextProgress));
+}
+
+function saveProgress(nextProgress) {
+  saveLocalProgress(nextProgress);
+  syncProfileToCloud();
 }
 
 function isDarkSquare(row, col) {
@@ -1420,6 +1906,14 @@ function opponent(player) {
 
 function squareName(row, col) {
   return `${"abcdefgh"[col]}${BOARD_SIZE - row}`;
+}
+
+function normalizeRoomCode(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-z0-9-]/gi, "")
+    .slice(0, 18)
+    .toUpperCase();
 }
 
 function formatMove(label, move) {

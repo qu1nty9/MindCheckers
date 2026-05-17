@@ -14,15 +14,16 @@ It is not positioned as another online checkers board. The product idea is a lig
 - 60-second demo onboarding path for judges and first-time users
 - Move history panel for showing that the game is being analyzed
 - Dark/light theme toggle saved locally
-- Local profile/auth preview saved in the browser
-- Pass-and-play friend mode with invite-link preview
+- Supabase-ready email magic-link auth with local fallback
+- Pass-and-play friend mode plus Supabase Realtime room links when configured
 - Progress stored in `localStorage`: XP, streak, tactics, foresight, and endgame skill bars
+- Optional cloud profile, cloud review archive, and global city leaderboard through Supabase
 - Level system with named strategy ranks, XP-to-next-level progress, and unlock messaging
-- Stored game review archive in `localStorage`
+- Stored game review archive in `localStorage` with move-by-move replay
 - Training path cards that make the learning progression visible
 - Interactive daily missions with claimable XP rewards
 - Copyable demo summary for pitching or sharing progress
-- Product layer preview: Pro modal, league joining, level drills, city leaderboard, and upgrade path
+- Product layer preview: Pro modal, league joining, level drills, city leaderboard, board skins, and upgrade path
 - Mobile-first responsive interface
 
 ## Product Positioning
@@ -38,8 +39,8 @@ The market gap is that most checkers products focus on basic play, simple ads, o
 The prototype intentionally targets the "Great" path from the brief while staying realistic for a short deadline.
 
 - Core game: 8x8 board, legal movement, mandatory captures, multi-jumps, kings, and winner detection.
-- Strong product layer: local AI opponent, three difficulty levels, hints, move history, responsive layout, local profile, and saved progress.
-- Great-level differentiation: AI-style coach review, unique niche around strategic thinking, level system, daily missions, city league preview, friend invite preview, and Upgrade to Pro flow.
+- Strong product layer: local AI opponent, three difficulty levels, hints, move history, responsive layout, auth-ready profile, and saved progress.
+- Great-level differentiation: AI-style coach review, unique niche around strategic thinking, level system, daily missions, replayable game archive, Supabase Realtime room links, city league preview, Pro board skins, and Upgrade to Pro flow.
 - Delivery requirements: live GitHub Pages project, GitHub repository, and product README explaining what was built, for whom, and why it is valuable.
 
 ## Business Logic
@@ -51,7 +52,7 @@ MindCheckers is built around a retention loop rather than a one-off game:
 3. Earn XP, progress through named strategy levels, and complete missions.
 4. Return for daily streaks, league ranking, and Pro-style deeper analysis.
 
-The monetization path is visible in the prototype through the Pro preview: deeper reviews, unlimited level drills, seasonal leagues, and future cosmetic board themes.
+The monetization path is visible in the prototype through the Pro preview: deeper reviews, unlimited level drills, seasonal leagues, and unlockable cosmetic board themes.
 
 ## Target User
 
@@ -61,18 +62,26 @@ The first audience is not only competitive checkers players. It is users who wan
 
 ## Technical Notes
 
-This prototype is intentionally static: no backend, no install step, no external API key.
+This prototype runs as a static site by default and upgrades into a Supabase-backed service when `config.js` is filled.
 
 Open `index.html` in a browser to run the app.
 
 The local AI is heuristic-based. The coach is rule-based and analyzes move history for captures, exposed pieces, promotion, material, tempo, safety, and endgame conversion. This keeps the demo stable within a short deadline while still showing the intended product loop.
 
+To enable the real backend path:
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the SQL editor.
+3. Put the project URL and anon key into `config.js`.
+4. Enable email magic links in Supabase Auth settings.
+
+With Supabase configured, MindCheckers uses email auth, cloud profile sync, cloud review storage, global city leaderboard rows, and Realtime WebSocket room broadcasts for friend links.
+
 ## Roadmap
 
-- Real account system and cloud game history
 - Stronger AI engine with deeper search
 - Personalized drills generated from recurring mistakes
-- Multiplayer rooms via invite link
-- Seasonal leagues and city leaderboards
+- Stripe checkout for paid Pro skins
+- Seasonal league resets and anti-cheat checks
 - Optional LLM-powered coach explanations
-- Pro tier with advanced reviews, custom boards, and unlimited drills
+- Pro tier with advanced reviews and unlimited drills
