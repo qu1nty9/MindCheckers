@@ -15,7 +15,7 @@ It is not positioned as another online checkers board. The product idea is a lig
 - Move history panel for showing that the game is being analyzed
 - Dark/light theme toggle saved locally
 - Supabase-ready email magic-link auth with local fallback
-- Pass-and-play friend mode plus Supabase Realtime room links when configured
+- Pass-and-play friend mode plus Supabase Realtime room links with Host/Guest sides when configured
 - Progress stored in `localStorage`: XP, streak, tactics, foresight, and endgame skill bars
 - Optional cloud profile, cloud review archive, and global city leaderboard through Supabase
 - Level system with named strategy ranks, XP-to-next-level progress, and unlock messaging
@@ -75,7 +75,7 @@ To enable the real backend path:
 3. Put the project URL and anon key into `config.js`.
 4. Enable email magic links in Supabase Auth settings.
 
-With Supabase configured, MindCheckers uses email auth, cloud profile sync, cloud review storage, global city leaderboard rows, and Realtime WebSocket room broadcasts for friend links.
+With Supabase configured, MindCheckers uses email auth, cloud profile sync, cloud review storage/loading, global city leaderboard rows, and Realtime WebSocket room broadcasts for friend links. Room creators play Green, invitees open `role=coral` links and play Coral.
 
 ## Roadmap
 

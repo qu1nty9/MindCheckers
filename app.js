@@ -83,6 +83,7 @@ let supabaseClient = null;
 let authUser = null;
 let cloudLeaderboardRows = [];
 let onlineRoom = "";
+let onlineRole = "";
 let realtimeChannel = null;
 let applyingRemoteState = false;
 const clientId = Math.random().toString(36).slice(2);
@@ -90,6 +91,7 @@ let progress = loadProgress();
 let gameMode = progress.gameMode || "ai";
 const urlParams = new URLSearchParams(location.search);
 const requestedRoom = normalizeRoomCode(urlParams.get("room"));
+const requestedRole = normalizeRoomRole(urlParams.get("role"));
 if (urlParams.get("mode") === "friend" || requestedRoom) {
   gameMode = "friend";
   progress.gameMode = "friend";
@@ -239,7 +241,7 @@ applyBoardSkin(progress.boardSkin);
 applyGameMode(gameMode);
 render();
 initializeCloud();
-if (requestedRoom) joinRealtimeRoom(requestedRoom);
+if (requestedRoom) joinRealtimeRoom(requestedRoom, requestedRole || "coral");
 if (!progress.onboardingSeen) openOnboardingModal();
 
 function createInitialBoard() {
@@ -519,7 +521,7 @@ function renderGameArchive() {
         return `
         <article class="archive-item">
           <strong>${item.score}/100 | ${item.modeLabel} | ${item.result}</strong>
-          <span>${item.date} | ${item.levelTitle} | ${item.moves} moves | ${item.focus}</span>
+          <span>${item.date} | ${item.levelTitle} | ${item.moves} moves | ${item.focus}${item.cloud ? " | cloud" : ""}</span>
           <div class="archive-actions">
             <button class="secondary-button" type="button" data-archive-id="${item.id}">View review</button>
             <button class="secondary-button" type="button" data-replay-id="${item.id}" ${hasReplay ? "" : "disabled"}>
@@ -583,6 +585,10 @@ function renderProductState() {
 function handleCellClick(row, col) {
   if (gameState !== "playing") return;
   if (gameMode === "ai" && currentPlayer !== HUMAN) return;
+  if (!canControlCurrentTurn()) {
+    liveTipEl.textContent = `Waiting for ${getMoveLabel(currentPlayer)}. You are ${onlineRole === "green" ? "Green" : "Coral"} in this room.`;
+    return;
+  }
 
   const piece = board[row][col];
   const chosenMove = legalMoves.find((move) => move.to.row === row && move.to.col === col);
@@ -870,9 +876,10 @@ function getSupabaseConfig() {
 }
 
 function renderCloudState() {
-  const roomLabel = onlineRoom ? ` | room ${onlineRoom}` : "";
+  const roleLabel = onlineRole ? ` as ${onlineRole === "green" ? "Green" : "Coral"}` : "";
+  const roomLabel = onlineRoom ? ` | room ${onlineRoom}${roleLabel}` : "";
   if (!supabaseClient) {
-    cloudStatusEl.textContent = `Cloud: demo mode${onlineRoom ? ` | preview room ${onlineRoom}` : ""}`;
+    cloudStatusEl.textContent = `Cloud: demo mode${onlineRoom ? ` | preview room ${onlineRoom}${roleLabel}` : ""}`;
     authStatusEl.textContent = "Supabase is not configured yet.";
     authButton.disabled = true;
     signOutButton.disabled = true;
@@ -920,6 +927,8 @@ async function hydrateCloudProfile() {
   } else {
     await syncProfileToCloud();
   }
+
+  await loadCloudReviews();
 }
 
 async function signInWithEmail() {
@@ -1123,12 +1132,13 @@ function createFriendInvite() {
   }
 
   const roomCode = onlineRoom || `MC-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-  joinRealtimeRoom(roomCode);
-  const invite = `${location.origin}${location.pathname}?mode=friend&room=${roomCode}`;
+  joinRealtimeRoom(roomCode, "green");
+  const invite = `${location.origin}${location.pathname}?mode=friend&room=${roomCode}&role=coral`;
   revealSummary(
     [
       "MindCheckers friend invite",
       `Room code: ${roomCode}`,
+      "Your side: Green. Friend side: Coral.",
       invite,
       supabaseClient
         ? "Realtime note: this room uses Supabase WebSocket broadcast when config.js is active."
@@ -1138,9 +1148,10 @@ function createFriendInvite() {
   showToast(`Invite ready: ${roomCode}.`);
 }
 
-async function joinRealtimeRoom(roomCode) {
+async function joinRealtimeRoom(roomCode, preferredRole = "") {
   onlineRoom = normalizeRoomCode(roomCode);
   if (!onlineRoom) return;
+  onlineRole = normalizeRoomRole(preferredRole) || onlineRole || "green";
 
   if (!supabaseClient) {
     renderProductState();
@@ -1166,6 +1177,7 @@ async function joinRealtimeRoom(roomCode) {
       await realtimeChannel.track({
         player: progress.playerName,
         city: progress.city,
+        role: onlineRole,
         joinedAt: new Date().toISOString(),
       });
       broadcastGameState("room-sync");
@@ -1195,6 +1207,7 @@ function broadcastGameState(reason) {
       coachEvents: coachEvents.map((event) => ({ ...event })),
       resultSaved,
       playerName: progress.playerName,
+      onlineRole,
     },
   });
 }
@@ -1219,6 +1232,15 @@ function applyRemoteGameState(payload) {
   liveTipEl.textContent = `${payload.playerName || "Friend"} synced the room. ${getMoveLabel(currentPlayer)} to move.`;
   render();
   applyingRemoteState = false;
+}
+
+function canControlCurrentTurn() {
+  if (gameMode !== "friend" || !onlineRoom || !onlineRole) return true;
+  return getPlayerForOnlineRole(onlineRole) === currentPlayer;
+}
+
+function getPlayerForOnlineRole(role) {
+  return role === "coral" ? AI : HUMAN;
 }
 
 async function syncProfileToCloud() {
@@ -1268,6 +1290,46 @@ async function loadCloudLeaderboard() {
 
   cloudLeaderboardRows = error ? [] : data || [];
   renderLeaderboard();
+}
+
+async function loadCloudReviews() {
+  if (!supabaseClient || !authUser) return;
+  const { data, error } = await supabaseClient
+    .from("game_reviews")
+    .select("id, score, result, mode_label, level_title, focus, move_count, moves, snapshots, created_at")
+    .eq("user_id", authUser.id)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !Array.isArray(data)) return;
+
+  const cloudReviews = data.map(mapCloudReview);
+  const existingIds = new Set(progress.gameHistory.map((item) => String(item.id)));
+  progress.gameHistory = [
+    ...cloudReviews.filter((item) => !existingIds.has(String(item.id))),
+    ...progress.gameHistory,
+  ].slice(0, 8);
+  saveLocalProgress(progress);
+  renderGameArchive();
+}
+
+function mapCloudReview(item) {
+  const movesFull = Array.isArray(item.moves) ? item.moves : [];
+  const snapshots = Array.isArray(item.snapshots) ? item.snapshots : [];
+  return {
+    id: `cloud-${item.id}`,
+    date: new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    score: Number(item.score) || 0,
+    moves: Number(item.move_count) || movesFull.length,
+    result: item.result || "Review",
+    modeLabel: item.mode_label || "Cloud",
+    levelTitle: item.level_title || "Cloud profile",
+    focus: item.focus || "Next focus: review habits",
+    movesFull,
+    movesPreview: movesFull.slice(-8),
+    snapshots,
+    cloud: true,
+  };
 }
 
 async function saveGameReviewToCloud(item) {
@@ -1914,6 +1976,13 @@ function normalizeRoomCode(value) {
     .replace(/[^a-z0-9-]/gi, "")
     .slice(0, 18)
     .toUpperCase();
+}
+
+function normalizeRoomRole(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["green", "host", "human"].includes(normalized)) return "green";
+  if (["coral", "guest", "ai"].includes(normalized)) return "coral";
+  return "";
 }
 
 function formatMove(label, move) {
