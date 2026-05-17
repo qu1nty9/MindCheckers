@@ -13,12 +13,15 @@ It is not positioned as another online checkers board. The product idea is a lig
 - Post-game coach review with strategy score, mistake pattern, and next drill
 - 60-second demo onboarding path for judges and first-time users
 - Move history panel for showing that the game is being analyzed
+- Dark/light theme toggle saved locally
+- Pass-and-play friend mode with invite-link preview
 - Progress stored in `localStorage`: XP, streak, tactics, foresight, and endgame skill bars
 - Level system with named strategy ranks, XP-to-next-level progress, and unlock messaging
+- Stored game review archive in `localStorage`
 - Training path cards that make the learning progression visible
 - Interactive daily missions with claimable XP rewards
 - Copyable demo summary for pitching or sharing progress
-- Product layer preview: Pro modal, league joining, level drills, and leaderboard
+- Product layer preview: Pro modal, league joining, level drills, city leaderboard, and upgrade path
 - Mobile-first responsive interface
 
 ## Product Positioning
@@ -35,7 +38,7 @@ The prototype intentionally targets the "Great" path from the brief while stayin
 
 - Core game: 8x8 board, legal movement, mandatory captures, multi-jumps, kings, and winner detection.
 - Strong product layer: local AI opponent, three difficulty levels, hints, move history, responsive layout, and saved progress.
-- Great-level differentiation: AI-style coach review, unique niche around strategic thinking, level system, daily missions, league preview, and Upgrade to Pro flow.
+- Great-level differentiation: AI-style coach review, unique niche around strategic thinking, level system, daily missions, city league preview, friend invite preview, and Upgrade to Pro flow.
 - Delivery requirements: live GitHub Pages project, GitHub repository, and product README explaining what was built, for whom, and why it is valuable.
 
 ## Business Logic

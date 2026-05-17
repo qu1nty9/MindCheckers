@@ -18,6 +18,22 @@
   color-scheme: light;
 }
 
+[data-theme="dark"] {
+  --mint-50: #0f1915;
+  --mint-100: #173026;
+  --mint-400: #62d38d;
+  --mint-600: #72e39d;
+  --leaf-700: #a5f2bd;
+  --ink-900: #eef8f0;
+  --ink-700: #c7d8cf;
+  --ink-500: #94a89d;
+  --line: #294238;
+  --panel: #15231d;
+  --cream: #222015;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -36,6 +52,12 @@ body {
     sans-serif;
   background:
     linear-gradient(180deg, rgba(220, 245, 229, 0.92), rgba(244, 251, 246, 0.98) 34rem),
+    var(--mint-50);
+}
+
+[data-theme="dark"] body {
+  background:
+    linear-gradient(180deg, rgba(28, 53, 42, 0.94), rgba(15, 25, 21, 0.98) 34rem),
     var(--mint-50);
 }
 
@@ -60,6 +82,12 @@ button {
   border-bottom: 1px solid rgba(220, 231, 223, 0.78);
   background: rgba(244, 251, 246, 0.86);
   backdrop-filter: blur(16px);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
 }
 
 .brand {
@@ -227,6 +255,14 @@ button {
   box-shadow: var(--shadow);
 }
 
+[data-theme="dark"] .side-panel,
+[data-theme="dark"] .board-zone,
+[data-theme="dark"] .wide-panel,
+[data-theme="dark"] .topbar-stats div,
+[data-theme="dark"] .mission-strip {
+  background: rgba(21, 35, 29, 0.9);
+}
+
 .side-panel,
 .wide-panel {
   padding: 1rem;
@@ -251,6 +287,15 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #eef7f1;
+}
+
+.mode-control,
+.city-control {
+  margin-top: 0.7rem;
+}
+
+[data-theme="dark"] .segmented-control {
+  background: #10221a;
 }
 
 .segment {
@@ -458,7 +503,7 @@ button {
 
 .game-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.65rem;
 }
 
@@ -520,6 +565,19 @@ button {
   border: 1px solid var(--line);
   color: var(--ink-700);
   background: #ffffff;
+}
+
+[data-theme="dark"] .secondary-button,
+[data-theme="dark"] .ghost-button,
+[data-theme="dark"] .segment.active,
+[data-theme="dark"] .review-card,
+[data-theme="dark"] .insight-card,
+[data-theme="dark"] .leaderboard li,
+[data-theme="dark"] .archive-item,
+[data-theme="dark"] .path-card,
+[data-theme="dark"] .business-cards div,
+[data-theme="dark"] .pro-grid div {
+  background: #172720;
 }
 
 .primary-button:hover,
@@ -814,6 +872,36 @@ button {
   display: block;
 }
 
+.archive-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.archive-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.archive-item {
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.archive-item strong,
+.archive-item span {
+  display: block;
+}
+
+.archive-item span {
+  margin-top: 0.28rem;
+  color: var(--ink-500);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 .business-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -938,6 +1026,11 @@ button {
   box-shadow: 0 24px 70px rgba(16, 38, 28, 0.28);
 }
 
+[data-theme="dark"] .modal,
+[data-theme="dark"] .toast {
+  background: #15231d;
+}
+
 .modal h2 {
   max-width: 520px;
   margin: 0;
@@ -956,6 +1049,10 @@ button {
   background: #ffffff;
   cursor: pointer;
   font-weight: 800;
+}
+
+[data-theme="dark"] .modal-close {
+  background: #172720;
 }
 
 .pro-grid {
@@ -1065,6 +1162,10 @@ button {
   .topbar-stats {
     order: 3;
     width: 100%;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
   }
 
   .topbar-stats div {

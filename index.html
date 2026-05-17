@@ -32,7 +32,10 @@
           </div>
         </div>
 
-        <button class="ghost-button" id="upgradeButton" type="button">Upgrade</button>
+        <div class="topbar-actions" aria-label="Global controls">
+          <button class="ghost-button" id="themeButton" type="button">Dark</button>
+          <button class="ghost-button" id="upgradeButton" type="button">Upgrade</button>
+        </div>
       </header>
 
       <main class="workspace">
@@ -66,6 +69,11 @@
               <button class="segment active" data-difficulty="gentle" type="button">Gentle</button>
               <button class="segment" data-difficulty="focused" type="button">Focused</button>
               <button class="segment" data-difficulty="sharp" type="button">Sharp</button>
+            </div>
+
+            <div class="segmented-control mode-control" aria-label="Game mode">
+              <button class="segment active" data-mode="ai" type="button">AI training</button>
+              <button class="segment" data-mode="friend" type="button">Friend</button>
             </div>
 
             <div class="metric-list">
@@ -110,6 +118,7 @@
               <button class="primary-button" id="newGameButton" type="button">New game</button>
               <button class="secondary-button" id="hintButton" type="button">Show hint</button>
               <button class="secondary-button" id="reviewButton" type="button">End & review</button>
+              <button class="secondary-button" id="inviteButton" type="button">Invite friend</button>
             </div>
 
             <div class="move-history" aria-label="Move history">
@@ -178,12 +187,28 @@
               <button class="primary-button" id="copySummaryButton" type="button">Copy demo summary</button>
             </div>
             <pre class="summary-output" id="summaryOutput" aria-live="polite"></pre>
+
+            <div class="archive-panel" aria-label="Stored game archive">
+              <div class="panel-heading inline-heading">
+                <div>
+                  <p class="eyebrow">Game archive</p>
+                  <h2>Past reviews</h2>
+                </div>
+                <span id="archiveCountLabel">0 saved</span>
+              </div>
+              <div class="archive-list" id="gameArchiveList"></div>
+            </div>
           </div>
 
           <div class="side-panel leaderboard-panel">
             <div class="panel-heading">
               <p class="eyebrow">League preview</p>
               <h2>Focus League</h2>
+            </div>
+            <div class="segmented-control city-control" aria-label="City leaderboard">
+              <button class="segment active" data-city="Almaty" type="button">Almaty</button>
+              <button class="segment" data-city="Moscow" type="button">Moscow</button>
+              <button class="segment" data-city="San Francisco" type="button">SF</button>
             </div>
             <ol class="leaderboard" id="leaderboard"></ol>
             <div class="mini-actions">

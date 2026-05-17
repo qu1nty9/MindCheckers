@@ -39,12 +39,16 @@ const unlockLabelEl = document.querySelector("#unlockLabel");
 const leagueButton = document.querySelector("#leagueButton");
 const levelDrillButton = document.querySelector("#levelDrillButton");
 const upgradeButton = document.querySelector("#upgradeButton");
+const themeButton = document.querySelector("#themeButton");
+const inviteButton = document.querySelector("#inviteButton");
 const proModal = document.querySelector("#proModal");
 const closeProModalButton = document.querySelector("#closeProModal");
 const activateProButton = document.querySelector("#activateProButton");
 const onboardingModal = document.querySelector("#onboardingModal");
 const startDemoButton = document.querySelector("#startDemoButton");
 const skipOnboardingButton = document.querySelector("#skipOnboardingButton");
+const archiveCountLabelEl = document.querySelector("#archiveCountLabel");
+const gameArchiveListEl = document.querySelector("#gameArchiveList");
 
 let board = createInitialBoard();
 let selected = null;
@@ -58,6 +62,11 @@ let moveLog = [];
 let coachEvents = [];
 let resultSaved = false;
 let progress = loadProgress();
+let gameMode = progress.gameMode || "ai";
+if (new URLSearchParams(location.search).get("mode") === "friend") {
+  gameMode = "friend";
+  progress.gameMode = "friend";
+}
 
 const LEVELS = [
   { xp: 0, title: "Pattern Scout", unlock: "Legal move glow" },
@@ -99,9 +108,29 @@ const MISSIONS = [
   },
 ];
 
+const CITY_LEADERBOARDS = {
+  Almaty: [
+    { name: "Aruzhan", detail: "1320 XP | Tactical Mapper" },
+    { name: "Mira", detail: "1240 XP | Center control specialist" },
+    { name: "Daniyar", detail: "1090 XP | Endgame discipline" },
+  ],
+  Moscow: [
+    { name: "Alex", detail: "1180 XP | Capture chains" },
+    { name: "Nika", detail: "1030 XP | Sharp AI climber" },
+    { name: "Tim", detail: "940 XP | Safety streak" },
+  ],
+  "San Francisco": [
+    { name: "Noah", detail: "970 XP | Capture chains" },
+    { name: "Maya", detail: "910 XP | Product league" },
+    { name: "Sam", detail: "860 XP | Daily drills" },
+  ],
+};
+
 document.querySelector("#newGameButton").addEventListener("click", startNewGame);
 document.querySelector("#hintButton").addEventListener("click", showHint);
 document.querySelector("#reviewButton").addEventListener("click", () => finishGame("review"));
+themeButton.addEventListener("click", toggleTheme);
+inviteButton.addEventListener("click", createFriendInvite);
 upgradeButton.addEventListener("click", openProModal);
 closeProModalButton.addEventListener("click", closeProModal);
 proModal.addEventListener("click", (event) => {
@@ -132,6 +161,20 @@ document.querySelectorAll("[data-difficulty]").forEach((button) => {
   });
 });
 
+document.querySelectorAll("[data-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setGameMode(button.dataset.mode);
+  });
+});
+
+document.querySelectorAll("[data-city]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setCity(button.dataset.city);
+  });
+});
+
+applyTheme(progress.theme);
+applyGameMode(gameMode);
 render();
 if (!progress.onboardingSeen) openOnboardingModal();
 
@@ -178,6 +221,7 @@ function render() {
   renderMission();
   renderInsights();
   renderTrainingPath();
+  renderGameArchive();
   renderLeaderboard();
   renderProductState();
 }
@@ -236,11 +280,11 @@ function renderStatus() {
 
   if (currentPlayer === AI) {
     turnStatusEl.classList.add("ai");
-    turnStatusEl.textContent = "AI thinking";
+    turnStatusEl.textContent = gameMode === "friend" ? "Coral turn" : "AI thinking";
     return;
   }
 
-  turnStatusEl.textContent = "Your move";
+  turnStatusEl.textContent = gameMode === "friend" ? "Green turn" : "Your move";
 }
 
 function renderMetrics() {
@@ -389,16 +433,41 @@ function renderTrainingPath() {
     .join("");
 }
 
+function renderGameArchive() {
+  const history = progress.gameHistory.slice(0, 5);
+  archiveCountLabelEl.textContent = `${progress.gameHistory.length} saved`;
+
+  if (!history.length) {
+    gameArchiveListEl.innerHTML = `
+      <article class="archive-item">
+        <strong>No saved reviews yet</strong>
+        <span>Finish a game review to store score, mode, level, and next drill.</span>
+      </article>
+    `;
+    return;
+  }
+
+  gameArchiveListEl.innerHTML = history
+    .map(
+      (item) => `
+        <article class="archive-item">
+          <strong>${item.score}/100 | ${item.modeLabel} | ${item.result}</strong>
+          <span>${item.date} | ${item.levelTitle} | ${item.moves} moves | ${item.focus}</span>
+        </article>
+      `,
+    )
+    .join("");
+}
+
 function renderLeaderboard() {
   const level = getLevelInfo(progress.xp);
+  const cityRows = CITY_LEADERBOARDS[progress.city] || CITY_LEADERBOARDS.Almaty;
   const rows = [
     {
       name: progress.leagueJoined ? "You" : "You (not joined)",
-      detail: `${progress.xp} XP | Lv. ${level.number} ${level.current.title}`,
+      detail: `${progress.xp} XP | Lv. ${level.number} ${level.current.title} | ${progress.city}`,
     },
-    { name: "Mira", detail: "1240 XP | Center control specialist" },
-    { name: "Alex", detail: "1180 XP | Endgame discipline" },
-    { name: "Noah", detail: "970 XP | Capture chains" },
+    ...cityRows,
   ];
 
   leaderboardEl.innerHTML = rows
@@ -414,27 +483,33 @@ function renderLeaderboard() {
 }
 
 function renderProductState() {
+  themeButton.textContent = progress.theme === "dark" ? "Light" : "Dark";
   upgradeButton.textContent = progress.proActive ? "Pro active" : "Upgrade";
   activateProButton.textContent = progress.proActive ? "Pro active" : "Activate demo Pro";
   activateProButton.disabled = progress.proActive;
   leagueButton.textContent = progress.leagueJoined ? "League joined" : "Join league";
   leagueButton.disabled = progress.leagueJoined;
+  inviteButton.textContent = gameMode === "friend" ? "Invite friend" : "Friend invite";
+  document.querySelectorAll("[data-city]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.city === progress.city);
+  });
 }
 
 function handleCellClick(row, col) {
-  if (gameState !== "playing" || currentPlayer !== HUMAN) return;
+  if (gameState !== "playing") return;
+  if (gameMode === "ai" && currentPlayer !== HUMAN) return;
 
   const piece = board[row][col];
   const chosenMove = legalMoves.find((move) => move.to.row === row && move.to.col === col);
 
   if (chosenMove && selected) {
-    playHumanMove(chosenMove);
+    playPlayerMove(chosenMove);
     return;
   }
 
-  if (piece?.player === HUMAN) {
+  if (piece?.player === currentPlayer) {
     selected = { row, col };
-    legalMoves = getLegalMovesForPiece(board, row, col, HUMAN);
+    legalMoves = getLegalMovesForPiece(board, row, col, currentPlayer);
     hintMove = null;
 
     if (!legalMoves.length) {
@@ -449,10 +524,11 @@ function handleCellClick(row, col) {
   }
 }
 
-function playHumanMove(move) {
-  const event = applyMove(board, move, HUMAN);
+function playPlayerMove(move) {
+  const movingPlayer = currentPlayer;
+  const event = applyMove(board, move, movingPlayer);
   coachEvents.push(event);
-  moveLog.push(formatMove("You", move));
+  moveLog.push(formatMove(getMoveLabel(movingPlayer), move));
   selected = null;
   legalMoves = [];
   hintMove = null;
@@ -470,6 +546,14 @@ function playHumanMove(move) {
   }
 
   if (checkGameOver()) {
+    render();
+    return;
+  }
+
+  if (gameMode === "friend") {
+    currentPlayer = opponent(movingPlayer);
+    liveTipEl.textContent =
+      currentPlayer === HUMAN ? "Green to move. Look for a safe route." : "Coral to move. Try to answer the threat.";
     render();
     return;
   }
@@ -591,6 +675,7 @@ function finishGame(winner) {
     progress.tactics = clamp(progress.tactics + captures * 4 + (humanWon ? 3 : 1), 0, 100);
     progress.foresight = clamp(progress.foresight + Math.max(1, 5 - exposures), 0, 100);
     progress.endgame = clamp(progress.endgame + promotions * 6 + (humanWon ? 3 : 1), 0, 100);
+    saveGameReview(winner);
     saveProgress(progress);
 
     const levelAfter = getLevelInfo(progress.xp).number;
@@ -611,12 +696,13 @@ function finishGame(winner) {
 }
 
 function showHint() {
-  if (gameState !== "playing" || currentPlayer !== HUMAN) return;
-  const moves = getAllMoves(board, HUMAN);
+  if (gameState !== "playing") return;
+  if (gameMode === "ai" && currentPlayer !== HUMAN) return;
+  const moves = getAllMoves(board, currentPlayer);
   if (!moves.length) return;
-  hintMove = chooseBestMove(board, moves, AI);
+  hintMove = chooseBestMove(board, moves, opponent(currentPlayer));
   selected = { ...hintMove.from };
-  legalMoves = getLegalMovesForPiece(board, hintMove.from.row, hintMove.from.col, HUMAN);
+  legalMoves = getLegalMovesForPiece(board, hintMove.from.row, hintMove.from.col, currentPlayer);
   liveTipEl.textContent = `Coach hint: consider ${squareName(hintMove.from.row, hintMove.from.col)} to ${squareName(hintMove.to.row, hintMove.to.col)}.`;
   render();
 }
@@ -718,6 +804,7 @@ function joinLeague() {
 function startLevelDrill() {
   const level = getLevelInfo(progress.xp);
   const drillDifficulty = level.number >= 4 ? "sharp" : level.number >= 2 ? "focused" : "gentle";
+  setGameMode("ai", false);
   startNewGame();
   setDifficulty(drillDifficulty, false);
   liveTipEl.textContent =
@@ -726,6 +813,92 @@ function startLevelDrill() {
       : "Level drill started: focus on one safe plan before attacking.";
   render();
   showToast(`Level drill started for Lv. ${level.number} ${level.current.title}.`);
+}
+
+function setGameMode(nextMode, announce = true) {
+  gameMode = nextMode;
+  progress.gameMode = nextMode;
+  saveProgress(progress);
+  applyGameMode(nextMode);
+  startNewGame();
+  if (announce) {
+    showToast(nextMode === "friend" ? "Friend mode: pass-and-play on one screen." : "AI training mode enabled.");
+  }
+}
+
+function applyGameMode(nextMode) {
+  document.querySelectorAll("[data-mode]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.mode === nextMode);
+  });
+}
+
+function toggleTheme() {
+  const nextTheme = progress.theme === "dark" ? "light" : "dark";
+  progress.theme = nextTheme;
+  saveProgress(progress);
+  applyTheme(nextTheme);
+  renderProductState();
+  showToast(`${capitalize(nextTheme)} theme enabled.`);
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+}
+
+function setCity(city) {
+  progress.city = city;
+  saveProgress(progress);
+  renderLeaderboard();
+  renderProductState();
+  showToast(`${city} leaderboard selected.`);
+}
+
+function createFriendInvite() {
+  if (gameMode !== "friend") {
+    setGameMode("friend", false);
+  }
+
+  const roomCode = `MC-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const invite = `${location.origin}${location.pathname}?mode=friend&room=${roomCode}`;
+  revealSummary(
+    [
+      "MindCheckers friend invite",
+      `Room code: ${roomCode}`,
+      invite,
+      "Prototype note: this is a pass-and-play preview. WebSocket rooms are the next backend step.",
+    ].join("\n"),
+  );
+  showToast(`Invite ready: ${roomCode}.`);
+}
+
+function saveGameReview(winner) {
+  const level = getLevelInfo(progress.xp);
+  const breakdown = calculateReviewBreakdown();
+  const weakest = [...breakdown].sort((a, b) => a.score - b.score)[0];
+  const result =
+    winner === "review"
+      ? "Review"
+      : winner === HUMAN
+        ? gameMode === "friend"
+          ? "Green win"
+          : "Win"
+        : gameMode === "friend"
+          ? "Coral win"
+          : "Loss";
+
+  progress.gameHistory = [
+    {
+      id: Date.now(),
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      score: calculateStrategyScore(),
+      moves: moveLog.length,
+      result,
+      modeLabel: gameMode === "friend" ? "Friend" : `AI ${capitalize(difficulty)}`,
+      levelTitle: `Lv. ${level.number} ${level.current.title}`,
+      focus: `Next focus: ${weakest.label}`,
+    },
+    ...progress.gameHistory,
+  ].slice(0, 8);
 }
 
 function copyDemoSummary() {
@@ -1142,6 +1315,10 @@ function normalizeProgress(saved) {
     proActive: Boolean(saved.proActive),
     onboardingSeen: Boolean(saved.onboardingSeen),
     lastPlayedDate: hasDailyStreakDate ? saved.lastPlayedDate : "",
+    theme: saved.theme === "dark" ? "dark" : "light",
+    gameMode: saved.gameMode === "friend" ? "friend" : "ai",
+    city: ["Almaty", "Moscow", "San Francisco"].includes(saved.city) ? saved.city : "Almaty",
+    gameHistory: Array.isArray(saved.gameHistory) ? saved.gameHistory.slice(0, 8) : [],
   };
 }
 
@@ -1160,6 +1337,10 @@ function defaultProgress() {
     proActive: false,
     onboardingSeen: false,
     lastPlayedDate: "",
+    theme: "light",
+    gameMode: "ai",
+    city: "Almaty",
+    gameHistory: [],
   };
 }
 
@@ -1186,6 +1367,11 @@ function squareName(row, col) {
 function formatMove(label, move) {
   const divider = move.captured ? "x" : "-";
   return `${label}: ${squareName(move.from.row, move.from.col)}${divider}${squareName(move.to.row, move.to.col)}`;
+}
+
+function getMoveLabel(player) {
+  if (gameMode === "friend") return player === HUMAN ? "Green" : "Coral";
+  return player === HUMAN ? "You" : "AI";
 }
 
 function signed(value) {
