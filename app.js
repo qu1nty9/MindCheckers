@@ -40,10 +40,15 @@ const leagueButton = document.querySelector("#leagueButton");
 const levelDrillButton = document.querySelector("#levelDrillButton");
 const upgradeButton = document.querySelector("#upgradeButton");
 const themeButton = document.querySelector("#themeButton");
+const profileButton = document.querySelector("#profileButton");
 const inviteButton = document.querySelector("#inviteButton");
 const proModal = document.querySelector("#proModal");
 const closeProModalButton = document.querySelector("#closeProModal");
 const activateProButton = document.querySelector("#activateProButton");
+const profileModal = document.querySelector("#profileModal");
+const closeProfileModalButton = document.querySelector("#closeProfileModal");
+const saveProfileButton = document.querySelector("#saveProfileButton");
+const playerNameInput = document.querySelector("#playerNameInput");
 const onboardingModal = document.querySelector("#onboardingModal");
 const startDemoButton = document.querySelector("#startDemoButton");
 const skipOnboardingButton = document.querySelector("#skipOnboardingButton");
@@ -130,11 +135,17 @@ document.querySelector("#newGameButton").addEventListener("click", startNewGame)
 document.querySelector("#hintButton").addEventListener("click", showHint);
 document.querySelector("#reviewButton").addEventListener("click", () => finishGame("review"));
 themeButton.addEventListener("click", toggleTheme);
+profileButton.addEventListener("click", openProfileModal);
 inviteButton.addEventListener("click", createFriendInvite);
 upgradeButton.addEventListener("click", openProModal);
 closeProModalButton.addEventListener("click", closeProModal);
+closeProfileModalButton.addEventListener("click", closeProfileModal);
+saveProfileButton.addEventListener("click", saveProfile);
 proModal.addEventListener("click", (event) => {
   if (event.target === proModal) closeProModal();
+});
+profileModal.addEventListener("click", (event) => {
+  if (event.target === profileModal) closeProfileModal();
 });
 activateProButton.addEventListener("click", activateProPreview);
 claimMissionButton.addEventListener("click", claimMissionReward);
@@ -151,8 +162,15 @@ skipOnboardingButton.addEventListener("click", closeOnboardingModal);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeProModal();
+    closeProfileModal();
     closeOnboardingModal(false);
   }
+});
+
+gameArchiveListEl.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-archive-id]");
+  if (!button) return;
+  showArchivedReview(Number(button.dataset.archiveId));
 });
 
 document.querySelectorAll("[data-difficulty]").forEach((button) => {
@@ -453,6 +471,7 @@ function renderGameArchive() {
         <article class="archive-item">
           <strong>${item.score}/100 | ${item.modeLabel} | ${item.result}</strong>
           <span>${item.date} | ${item.levelTitle} | ${item.moves} moves | ${item.focus}</span>
+          <button class="secondary-button" type="button" data-archive-id="${item.id}">View review</button>
         </article>
       `,
     )
@@ -464,7 +483,7 @@ function renderLeaderboard() {
   const cityRows = CITY_LEADERBOARDS[progress.city] || CITY_LEADERBOARDS.Almaty;
   const rows = [
     {
-      name: progress.leagueJoined ? "You" : "You (not joined)",
+      name: progress.leagueJoined ? progress.playerName : `${progress.playerName} (not joined)`,
       detail: `${progress.xp} XP | Lv. ${level.number} ${level.current.title} | ${progress.city}`,
     },
     ...cityRows,
@@ -484,6 +503,7 @@ function renderLeaderboard() {
 
 function renderProductState() {
   themeButton.textContent = progress.theme === "dark" ? "Light" : "Dark";
+  profileButton.textContent = progress.playerName;
   upgradeButton.textContent = progress.proActive ? "Pro active" : "Upgrade";
   activateProButton.textContent = progress.proActive ? "Pro active" : "Activate demo Pro";
   activateProButton.disabled = progress.proActive;
@@ -712,6 +732,17 @@ function openProModal() {
   proModal.setAttribute("aria-hidden", "false");
 }
 
+function openProfileModal() {
+  playerNameInput.value = progress.playerName;
+  profileModal.classList.add("show");
+  profileModal.setAttribute("aria-hidden", "false");
+}
+
+function closeProfileModal() {
+  profileModal.classList.remove("show");
+  profileModal.setAttribute("aria-hidden", "true");
+}
+
 function openOnboardingModal() {
   onboardingModal.classList.add("show");
   onboardingModal.setAttribute("aria-hidden", "false");
@@ -728,6 +759,15 @@ function closeOnboardingModal(markSeen = true) {
 function closeProModal() {
   proModal.classList.remove("show");
   proModal.setAttribute("aria-hidden", "true");
+}
+
+function saveProfile() {
+  const nextName = playerNameInput.value.trim() || "Strategy learner";
+  progress.playerName = nextName.slice(0, 24);
+  saveProgress(progress);
+  closeProfileModal();
+  render();
+  showToast("Local profile saved.");
 }
 
 function activateProPreview() {
@@ -896,9 +936,25 @@ function saveGameReview(winner) {
       modeLabel: gameMode === "friend" ? "Friend" : `AI ${capitalize(difficulty)}`,
       levelTitle: `Lv. ${level.number} ${level.current.title}`,
       focus: `Next focus: ${weakest.label}`,
+      movesPreview: moveLog.slice(-8),
     },
     ...progress.gameHistory,
   ].slice(0, 8);
+}
+
+function showArchivedReview(id) {
+  const item = progress.gameHistory.find((game) => game.id === id);
+  if (!item) return;
+
+  revealSummary(
+    [
+      "Archived MindCheckers review",
+      `${item.score}/100 | ${item.modeLabel} | ${item.result}`,
+      `${item.date} | ${item.levelTitle}`,
+      item.focus,
+      item.movesPreview?.length ? `Moves: ${item.movesPreview.join(", ")}` : "Moves: no stored moves",
+    ].join("\n"),
+  );
 }
 
 function copyDemoSummary() {
@@ -1319,6 +1375,7 @@ function normalizeProgress(saved) {
     gameMode: saved.gameMode === "friend" ? "friend" : "ai",
     city: ["Almaty", "Moscow", "San Francisco"].includes(saved.city) ? saved.city : "Almaty",
     gameHistory: Array.isArray(saved.gameHistory) ? saved.gameHistory.slice(0, 8) : [],
+    playerName: typeof saved.playerName === "string" && saved.playerName.trim() ? saved.playerName : "You",
   };
 }
 
@@ -1341,6 +1398,7 @@ function defaultProgress() {
     gameMode: "ai",
     city: "Almaty",
     gameHistory: [],
+    playerName: "You",
   };
 }
 

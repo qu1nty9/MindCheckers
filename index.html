@@ -8,7 +8,7 @@
       name="description"
       content="A calm Duolingo-style checkers trainer for strategic thinking, local AI games, post-game coaching, and progress tracking."
     />
-    <link rel="stylesheet" href="styles.css?v=20260517-review" />
+    <link rel="stylesheet" href="styles.css?v=20260517-gap1" />
   </head>
   <body>
     <div class="app-shell">
@@ -34,6 +34,7 @@
 
         <div class="topbar-actions" aria-label="Global controls">
           <button class="ghost-button" id="themeButton" type="button">Dark</button>
+          <button class="ghost-button" id="profileButton" type="button">Profile</button>
           <button class="ghost-button" id="upgradeButton" type="button">Upgrade</button>
         </div>
       </header>
@@ -304,8 +305,22 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="profileModal" aria-hidden="true">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+        <button class="modal-close" id="closeProfileModal" type="button" aria-label="Close profile">Close</button>
+        <p class="eyebrow">Local profile</p>
+        <h2 id="profileTitle">Save a prototype account on this device.</h2>
+        <label class="field-label" for="playerNameInput">Player name</label>
+        <input class="text-input" id="playerNameInput" type="text" maxlength="24" placeholder="Strategy learner" />
+        <div class="profile-note">
+          This is a local auth preview: progress, city, theme, Pro state, and review archive stay in this browser.
+        </div>
+        <button class="primary-button" id="saveProfileButton" type="button">Save profile</button>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="app.js?v=20260517-review"></script>
+    <script src="app.js?v=20260517-gap1"></script>
   </body>
 </html>
